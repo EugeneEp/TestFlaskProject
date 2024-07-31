@@ -1,0 +1,10 @@
+*.exe
+*.exe~
+*.dll
+
+/.idea/
+/bin/
+
+*.toml
+*.log
+*.yml
