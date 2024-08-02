@@ -1,57 +1,92 @@
-from app import app, db
+import functools
+import flask
+from app import app, db, errors as err
 from app.models import User
-from app.forms import LoginForm, RegistrationForm
-from flask import render_template, flash, redirect, url_for
-from flask_login import current_user, login_user, logout_user, login_required
-from flask import request
-from urllib.parse import urlsplit
+from flask import request, render_template
+from http import HTTPStatus
 import sqlalchemy as sa
 
 
-
-
-@app.route('/', methods=['GET', 'POST'])
-@app.route('/index', methods=['GET', 'POST'])
-@login_required
+@app.get('/')
+@app.get('/index')
 def index():
     return render_template('index.html', title='Home')
 
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return render_template("index.html", title='Home')
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = db.session.scalar(
-            sa.Select(User).where(
-                (User.username == form.username.data)
-            )
-        )
-        if user is None or not user.check_password(form.password.data):
-            flash('Invalid username or password')
-            return redirect(url_for('login'))
-        login_user(user, remember=form.remember_me.data)
-        next_page = request.args.get('next')
-        if not next_page or urlsplit(next_page).netloc != '':
-            next_page = url_for('index')
-        return redirect(next_page)
-    return render_template("login.html", title='Sign In', form=form)
+def json_required(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        content_type = request.headers.get('Content-Type')
+        if content_type == 'application/json':
+            return func(*args, **kwargs)
+        else:
+            return err.New(err.ERR_CONTENT_TYPE, HTTPStatus.BAD_REQUEST)
 
-@app.route('/registration',  methods=['GET', 'POST'])
-def registration():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data, password=form.password.data)
-        db.session.add(user)
-        db.session.commit()
-        flash('Congratulations, you are now a registered user!')
-        return redirect(url_for('login'))
-    return render_template('registration.html', title='Register', form=form)
+    return wrapper
 
-@app.route('/logout')
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
+
+@app.post('/api/users')
+@json_required
+def create_user():
+    data = request.get_json()
+    user = User(username=data['username'], email=data['email'], password=data['password'])
+    if db.session.scalar(
+            sa.select(User).where(User.email == user.email)
+    ) is not None:
+        return err.New(err.ERR_USER_EXISTS, HTTPStatus.BAD_REQUEST)
+
+    db.session.add(user)
+    db.session.commit()
+    return flask.jsonify({'message': 'User created', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.CREATED
+
+
+@app.get('/api/users/<user_id>')
+def get_user(user_id):
+    user = db.session.scalar(sa.select(User).where(User.id == user_id))
+    if user is None:
+        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+
+    return flask.jsonify({'message': 'User found', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.OK
+
+
+@app.get('/api/users')
+def get_users():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 1000, type=int)
+    query = sa.select(User).order_by(User.timestamp.desc())
+    users = db.paginate(query, page=page, per_page=per_page, error_out=False)
+    body = []
+    for user in users.items:
+        body.append(user.to_dict())
+
+    if not len(body):
+        return err.New(err.ERR_USERS_NOT_FOUND, HTTPStatus.NOT_FOUND)
+
+    return flask.jsonify({'message': 'Users found', 'status': True, 'body': body}), HTTPStatus.OK
+
+
+@app.patch('/api/users/<user_id>')
+@json_required
+def update_user(user_id):
+    data = request.get_json()
+    user = db.session.scalar(sa.select(User).where(User.id == user_id))
+    if user is None:
+        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+    if data['username'] is not None and data['username'] != '':
+        user.username = data['username']
+    if data['password'] is not None and data['password'] != '':
+        user.set_password(data['password'])
+
+    db.session.commit()
+    return flask.jsonify({'message': 'User updated', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.OK
+
+
+@app.delete('/api/users/<user_id>')
+def delete_user(user_id):
+    user = db.session.scalar(sa.select(User).where(User.id == user_id))
+    if user is None:
+        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+
+    db.session.delete(user)
+    db.session.commit()
+    return flask.jsonify({'message': 'User deleted', 'status': True}), HTTPStatus.OK
