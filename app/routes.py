@@ -1,10 +1,12 @@
+import datetime
 import functools
 import flask
 from app import app, db, errors as err
 from app.models import User
-from flask import request, render_template
+from flask import request, render_template, jsonify
 from http import HTTPStatus
 import sqlalchemy as sa
+import jwt
 
 
 @app.get('/')
@@ -25,8 +27,47 @@ def json_required(func):
     return wrapper
 
 
+def token_required(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        access_token = request.authorization
+        if not access_token:
+            return err.New(err.ERR_TOKEN_MISSING, HTTPStatus.FORBIDDEN)
+        if 'Bearer' not in str(access_token):
+            return err.New(err.ERR_AUTH_METHOD_NOT_ALLOWED, HTTPStatus.METHOD_NOT_ALLOWED)
+        try:
+            jwt.decode(access_token.token, app.config['SECRET_KEY'], algorithms="HS256")
+        except Exception:
+            return err.New(err.ERR_TOKEN_INVALID, HTTPStatus.FORBIDDEN)
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def token_generate(username, expired, secret_key):
+    return jwt.encode(
+        {
+            'user': username,
+            'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=expired)
+         },secret_key
+    )
+
+
+@app.post("/api/auth")
+@json_required
+def login():
+    data = request.get_json()
+    if 'username' not in data or 'password' not in data:
+        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+    if data['username'] == 'admin' and data['password'] == 'admin':
+        access_token = token_generate(data['username'], app.config['JWT_EXPIRED_SECONDS'], app.config['SECRET_KEY'])
+        return flask.jsonify({'message': 'Authorized', 'status': True, 'body': [access_token]}), HTTPStatus.OK
+    return err.New(err.ERR_JWT_VERIFY, HTTPStatus.UNAUTHORIZED)
+
+
 @app.post('/api/users')
 @json_required
+@token_required
 def create_user():
     data = request.get_json()
     if 'username' not in data or 'password' not in data or 'email' not in data:
@@ -46,6 +87,7 @@ def create_user():
 
 
 @app.get('/api/users/<user_id>')
+@token_required
 def get_user(user_id):
     user = db.session.scalar(sa.select(User).where(User.id == user_id))
     if user is None:
@@ -55,6 +97,7 @@ def get_user(user_id):
 
 
 @app.get('/api/users')
+@token_required
 def get_users():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 1000, type=int)
@@ -72,6 +115,7 @@ def get_users():
 
 @app.patch('/api/users/<user_id>')
 @json_required
+@token_required
 def update_user(user_id):
     data = request.get_json()
     user = db.session.scalar(sa.select(User).where(User.id == user_id))
@@ -87,6 +131,7 @@ def update_user(user_id):
 
 
 @app.delete('/api/users/<user_id>')
+@token_required
 def delete_user(user_id):
     user = db.session.scalar(sa.select(User).where(User.id == user_id))
     if user is None:
