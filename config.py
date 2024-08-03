@@ -12,3 +12,4 @@ class Config(object):
     LOGGING_DIR = os.environ.get('LOGGING_DIR') or 'logs'
     LOGGING_FILE = os.environ.get('LOGGING_FILE') or 'test_flask_pj.log'
     LOGGING_FORMAT = os.environ.get('LOGGING_FORMAT') or '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    JWT_EXPIRED_SECONDS = os.environ.get('JWT_EXPIRED_SECONDS') or 60 * 60
