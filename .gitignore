@@ -5,6 +5,7 @@
 /.idea/
 /bin/
 /__pycache__/
+/logs/
 
 *.toml
 *.log
