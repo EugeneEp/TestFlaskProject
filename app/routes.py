@@ -29,6 +29,11 @@ def json_required(func):
 @json_required
 def create_user():
     data = request.get_json()
+    if 'username' not in data or 'password' not in data or 'email' not in data:
+        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+    if data['username'] == '' or data['password'] == '' or data['email'] == '':
+        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+
     user = User(username=data['username'], email=data['email'], password=data['password'])
     if db.session.scalar(
             sa.select(User).where(User.email == user.email)
@@ -72,9 +77,9 @@ def update_user(user_id):
     user = db.session.scalar(sa.select(User).where(User.id == user_id))
     if user is None:
         return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
-    if data['username'] is not None and data['username'] != '':
+    if 'username' in data and data['username'] != '':
         user.username = data['username']
-    if data['password'] is not None and data['password'] != '':
+    if 'password' in data and data['password'] != '':
         user.set_password(data['password'])
 
     db.session.commit()
