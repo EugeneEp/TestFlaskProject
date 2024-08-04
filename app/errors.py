@@ -1,7 +1,6 @@
 from werkzeug.exceptions import HTTPException
 
-from app import app
-import flask
+from app import api
 
 ERR_CONTENT_TYPE = 'Content type is not supported'
 
@@ -20,10 +19,10 @@ ERR_AUTH_METHOD_NOT_ALLOWED = 'Auth method is not allowed'
 
 
 def New(message, code):
-    return flask.jsonify({'message': message, 'status': False}), code
+    return {'message': message, 'status': False}, code
 
 
-@app.errorhandler(HTTPException)
+@api.errorhandler(HTTPException)
 def handle_exception(e):
-    return flask.jsonify({'error': e.name, 'message': e.description, 'status': False}), e.code
+    return {'error': e.name, 'message': e.description, 'status': False}, e.code
 

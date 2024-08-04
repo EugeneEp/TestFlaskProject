@@ -1,30 +1,12 @@
 import datetime
 import functools
-import flask
-from app import app, db, errors as err
-from app.models import User
-from flask import request, render_template, jsonify
+from app import app, api, db, errors as err
+from app.models import User, auth_fields, create_user, update_user
+from flask import request
 from http import HTTPStatus
 import sqlalchemy as sa
 import jwt
-
-
-@app.get('/')
-@app.get('/index')
-def index():
-    return render_template('index.html', title='Home')
-
-
-def json_required(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        content_type = request.headers.get('Content-Type')
-        if content_type == 'application/json':
-            return func(*args, **kwargs)
-        else:
-            return err.New(err.ERR_CONTENT_TYPE, HTTPStatus.BAD_REQUEST)
-
-    return wrapper
+from flask_restx import Resource, fields
 
 
 def token_required(func):
@@ -49,94 +31,97 @@ def token_generate(username, expired, secret_key):
         {
             'user': username,
             'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=expired)
-         },secret_key
+        }, secret_key
     )
 
 
-@app.post("/api/auth")
-@json_required
-def login():
-    data = request.get_json()
-    if 'username' not in data or 'password' not in data:
-        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
-    if data['username'] == 'admin' and data['password'] == 'admin':
-        access_token = token_generate(data['username'], app.config['JWT_EXPIRED_SECONDS'], app.config['SECRET_KEY'])
-        return flask.jsonify({'message': 'Authorized', 'status': True, 'body': [access_token]}), HTTPStatus.OK
-    return err.New(err.ERR_JWT_VERIFY, HTTPStatus.UNAUTHORIZED)
+@api.route('/api/auth')
+class Auth(Resource):
+    @api.doc(description='Generate apiKey (username=admin / password=admin)', body=auth_fields)
+    def post(self):
+        data = request.get_json()
+        if 'username' not in data or 'password' not in data:
+            return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+        if data['username'] == 'admin' and data['password'] == 'admin':
+            access_token = token_generate(data['username'], app.config['JWT_EXPIRED_SECONDS'], app.config['SECRET_KEY'])
+            return {'message': 'Authorized', 'status': True, 'body': [access_token]}, HTTPStatus.OK
+        return err.New(err.ERR_JWT_VERIFY, HTTPStatus.UNAUTHORIZED)
 
 
-@app.post('/api/users')
-@json_required
-@token_required
-def create_user():
-    data = request.get_json()
-    if 'username' not in data or 'password' not in data or 'email' not in data:
-        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
-    if data['username'] == '' or data['password'] == '' or data['email'] == '':
-        return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+@api.route('/api/users')
+class Users(Resource):
+    @api.doc(description='Create a new user', body=create_user, security='api_key')
+    @token_required
+    def post(self):
+        data = request.get_json()
+        if 'username' not in data or 'password' not in data or 'email' not in data:
+            return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
+        if data['username'] == '' or data['password'] == '' or data['email'] == '':
+            return err.New(err.ERR_REQUIRED_FIELD, HTTPStatus.BAD_REQUEST)
 
-    user = User(username=data['username'], email=data['email'], password=data['password'])
-    if db.session.scalar(
-            sa.select(User).where(User.email == user.email)
-    ) is not None:
-        return err.New(err.ERR_USER_EXISTS, HTTPStatus.BAD_REQUEST)
+        user = User(username=data['username'], email=data['email'], password=data['password'])
+        if db.session.scalar(
+                sa.select(User).where(User.email == user.email)
+        ) is not None:
+            return err.New(err.ERR_USER_EXISTS, HTTPStatus.BAD_REQUEST)
 
-    db.session.add(user)
-    db.session.commit()
-    return flask.jsonify({'message': 'User created', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.CREATED
+        db.session.add(user)
+        db.session.commit()
+        return {'message': 'User created', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.CREATED
 
+    @api.doc(description='Get Users List', security='api_key', params={
+        'page': {'description': 'Page', 'in': 'query', 'type': 'int'},
+        'per_page': {'description': 'Results per page', 'in': 'query', 'type': 'int'}
+    })
+    @token_required
+    def get(self):
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 1000, type=int)
+        query = sa.select(User).order_by(User.timestamp.desc())
+        users = db.paginate(query, page=page, per_page=per_page, error_out=False)
+        body = []
+        for user in users.items:
+            body.append(user.to_dict())
 
-@app.get('/api/users/<user_id>')
-@token_required
-def get_user(user_id):
-    user = db.session.scalar(sa.select(User).where(User.id == user_id))
-    if user is None:
-        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+        if not len(body):
+            return err.New(err.ERR_USERS_NOT_FOUND, HTTPStatus.NOT_FOUND)
 
-    return flask.jsonify({'message': 'User found', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.OK
-
-
-@app.get('/api/users')
-@token_required
-def get_users():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 1000, type=int)
-    query = sa.select(User).order_by(User.timestamp.desc())
-    users = db.paginate(query, page=page, per_page=per_page, error_out=False)
-    body = []
-    for user in users.items:
-        body.append(user.to_dict())
-
-    if not len(body):
-        return err.New(err.ERR_USERS_NOT_FOUND, HTTPStatus.NOT_FOUND)
-
-    return flask.jsonify({'message': 'Users found', 'status': True, 'body': body}), HTTPStatus.OK
+        return {'message': 'Users found', 'status': True, 'body': body}, HTTPStatus.OK
 
 
-@app.patch('/api/users/<user_id>')
-@json_required
-@token_required
-def update_user(user_id):
-    data = request.get_json()
-    user = db.session.scalar(sa.select(User).where(User.id == user_id))
-    if user is None:
-        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
-    if 'username' in data and data['username'] != '':
-        user.username = data['username']
-    if 'password' in data and data['password'] != '':
-        user.set_password(data['password'])
+@api.route('/api/users/<string:user_id>')
+class OneUser(Resource):
+    @api.doc(description='Get User', security='api_key')
+    @token_required
+    def get(self, user_id):
+        user = db.session.scalar(sa.select(User).where(User.id == user_id))
+        if user is None:
+            return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
 
-    db.session.commit()
-    return flask.jsonify({'message': 'User updated', 'status': True, 'body': [user.to_dict()]}), HTTPStatus.OK
+        return {'message': 'User found', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
+    @api.doc(description='Get User', body=update_user, security='api_key')
+    @token_required
+    def patch(self, user_id):
+        data = request.get_json()
+        user = db.session.scalar(sa.select(User).where(User.id == user_id))
+        if user is None:
+            return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+        if 'username' in data and data['username'] != '':
+            user.username = data['username']
+        if 'password' in data and data['password'] != '':
+            user.set_password(data['password'])
 
-@app.delete('/api/users/<user_id>')
-@token_required
-def delete_user(user_id):
-    user = db.session.scalar(sa.select(User).where(User.id == user_id))
-    if user is None:
-        return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+        db.session.commit()
+        return {'message': 'User updated', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
-    db.session.delete(user)
-    db.session.commit()
-    return flask.jsonify({'message': 'User deleted', 'status': True}), HTTPStatus.OK
+    @api.doc(description='Get User', security='api_key')
+    @token_required
+    def delete(self, user_id):
+        user = db.session.scalar(sa.select(User).where(User.id == user_id))
+        if user is None:
+            return err.New(err.ERR_USER_NOT_FOUND, HTTPStatus.NOT_FOUND)
+
+        db.session.delete(user)
+        db.session.commit()
+        return {'message': 'User deleted', 'status': True}, HTTPStatus.OK
