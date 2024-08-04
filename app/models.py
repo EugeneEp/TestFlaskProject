@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
-from flask_login import UserMixin
 from typing import Optional
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from werkzeug.security import generate_password_hash, check_password_hash
-from app import db
+from app import db, api
+from flask_restx import fields
 import uuid
 
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     id: so.Mapped[str] = so.MappedColumn(sa.String(64), primary_key=True)
     username: so.Mapped[str] = so.MappedColumn(sa.String(64), index=True, unique=True)
     email: so.Mapped[str] = so.MappedColumn(sa.String(120), index=True, unique=True)
@@ -31,7 +31,7 @@ class User(UserMixin, db.Model):
             'username': self.username,
             'email': self.email,
             'password_hash': self.password_hash,
-            'timestamp': self.timestamp,
+            'timestamp': str(self.timestamp),
         }
 
     def __init__(self, username, email, password):
@@ -39,3 +39,19 @@ class User(UserMixin, db.Model):
         self.email = email
         self.set_password(password)
         self.set_id()
+
+auth_fields = api.model('Auth', {
+    'username': fields.String(description='Username', required=True),
+    'password': fields.String(description='Password', required=True)
+})
+
+create_user = api.model('CreateUser', {
+    'username': fields.String(description='Username', required=True),
+    'password': fields.String(description='Password', required=True),
+    'email': fields.String(description='Email', required=True, validate=lambda email: email.strip()),
+})
+
+update_user = api.model('UpdateUser', {
+    'username': fields.String(description='Username', required=True),
+    'password': fields.String(description='Password', required=True)
+})

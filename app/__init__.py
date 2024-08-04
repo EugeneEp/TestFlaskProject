@@ -5,11 +5,30 @@ from config import Config
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+from flask_restx import Api
 
 app = Flask(__name__)
 app.config.from_object(Config)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+authorizations = {
+    'api_key': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'Authorization',
+        'description': "Type in the *'Value'* input box below: **'Bearer &lt;JWT&gt;'**, where JWT is the token"
+    }
+}
+
+api = Api(
+    app,
+    authorizations=authorizations,
+    security='api_key',
+    title='TestFlaskProject',
+    version='1.0',
+    default='API'
+)
 
 from app import routes, models
 
