@@ -27,10 +27,12 @@ api = Api(
     security='api_key',
     title='TestFlaskProject',
     version='1.0',
-    default='API'
+    default='API',
 )
 
-from app import routes, models
+from app.v1.routes import v1
+
+api.add_namespace(v1)
 
 if not app.debug:
     if not os.path.exists(Config.LOGGING_DIR):
