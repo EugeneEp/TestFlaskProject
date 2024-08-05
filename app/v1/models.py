@@ -16,15 +16,19 @@ class User(db.Model):
     timestamp: so.Mapped[datetime] = so.mapped_column(
         index=True, default=lambda: datetime.now(timezone.utc))
 
+    # Метод генерации и присвоения id
     def set_id(self):
         self.id = str(uuid.uuid4())
 
+    # Метод генерации и присвоения password
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
+    # Метод проверки password
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    # Метод конвертации класса User в dict
     def to_dict(self):
         return {
             'id': self.id,

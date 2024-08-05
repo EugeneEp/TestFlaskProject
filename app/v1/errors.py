@@ -18,11 +18,12 @@ ERR_TOKEN_INVALID = 'Token is invalid/expired'
 ERR_AUTH_METHOD_NOT_ALLOWED = 'Auth method is not allowed'
 
 
+# Функция формирования тела ответа ошибок
 def New(message, code):
     return {'message': message, 'status': False}, code
 
 
+# Изменение тела ответа стандартного обработчика ошибок
 @api.errorhandler(HTTPException)
 def handle_exception(e):
     return {'error': e.name, 'message': e.description, 'status': False}, e.code
-
