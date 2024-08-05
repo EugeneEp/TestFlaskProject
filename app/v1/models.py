@@ -40,6 +40,7 @@ class User(db.Model):
         self.set_password(password)
         self.set_id()
 
+
 auth_fields = api.model('Auth', {
     'username': fields.String(description='Username', required=True),
     'password': fields.String(description='Password', required=True)

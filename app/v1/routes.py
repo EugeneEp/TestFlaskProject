@@ -1,12 +1,15 @@
 import datetime
 import functools
-from app import app, api, db, errors as err
-from app.models import User, auth_fields, create_user, update_user
+from app import app, api, db
+from app.v1 import errors as err
+from app.v1.models import User, auth_fields, create_user, update_user
 from flask import request
 from http import HTTPStatus
 import sqlalchemy as sa
 import jwt
-from flask_restx import Resource, fields
+from flask_restx import Resource
+
+v1 = api.namespace('api/v1', description='Api v1 operations')
 
 
 def token_required(func):
@@ -35,9 +38,9 @@ def token_generate(username, expired, secret_key):
     )
 
 
-@api.route('/api/auth')
+@v1.route('/auth')
 class Auth(Resource):
-    @api.doc(description='Generate apiKey (username=admin / password=admin)', body=auth_fields)
+    @v1.doc(description='Generate apiKey (username=admin / password=admin)', body=auth_fields)
     def post(self):
         data = request.get_json()
         if 'username' not in data or 'password' not in data:
@@ -48,9 +51,9 @@ class Auth(Resource):
         return err.New(err.ERR_JWT_VERIFY, HTTPStatus.UNAUTHORIZED)
 
 
-@api.route('/api/users')
+@v1.route('/users')
 class Users(Resource):
-    @api.doc(description='Create a new user', body=create_user, security='api_key')
+    @v1.doc(description='Create a new user', body=create_user, security='api_key')
     @token_required
     def post(self):
         data = request.get_json()
@@ -69,7 +72,7 @@ class Users(Resource):
         db.session.commit()
         return {'message': 'User created', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.CREATED
 
-    @api.doc(description='Get Users List', security='api_key', params={
+    @v1.doc(description='Get Users List', security='api_key', params={
         'page': {'description': 'Page', 'in': 'query', 'type': 'int'},
         'per_page': {'description': 'Results per page', 'in': 'query', 'type': 'int'}
     })
@@ -89,9 +92,9 @@ class Users(Resource):
         return {'message': 'Users found', 'status': True, 'body': body}, HTTPStatus.OK
 
 
-@api.route('/api/users/<string:user_id>')
+@v1.route('/users/<string:user_id>')
 class OneUser(Resource):
-    @api.doc(description='Get User', security='api_key')
+    @v1.doc(description='Get User', security='api_key')
     @token_required
     def get(self, user_id):
         user = db.session.scalar(sa.select(User).where(User.id == user_id))
@@ -100,7 +103,7 @@ class OneUser(Resource):
 
         return {'message': 'User found', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
-    @api.doc(description='Get User', body=update_user, security='api_key')
+    @v1.doc(description='Get User', body=update_user, security='api_key')
     @token_required
     def patch(self, user_id):
         data = request.get_json()
@@ -115,7 +118,7 @@ class OneUser(Resource):
         db.session.commit()
         return {'message': 'User updated', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
-    @api.doc(description='Get User', security='api_key')
+    @v1.doc(description='Get User', security='api_key')
     @token_required
     def delete(self, user_id):
         user = db.session.scalar(sa.select(User).where(User.id == user_id))
