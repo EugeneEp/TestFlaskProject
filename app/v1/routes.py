@@ -101,7 +101,7 @@ class Users(Resource):
 class OneUser(Resource):
 
     # Метод получения пользователя по id
-    @v1.doc(description='Get User', security='api_key')
+    @v1.doc(description='Get User By Id', security='api_key')
     @token_required
     def get(self, user_id):
         user = db.session.scalar(sa.select(User).where(User.id == user_id))
@@ -111,7 +111,7 @@ class OneUser(Resource):
         return {'message': 'User found', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
     # Метод обновления данных пользователя
-    @v1.doc(description='Get User', body=update_user, security='api_key')
+    @v1.doc(description='Update User By Id', body=update_user, security='api_key')
     @token_required
     def patch(self, user_id):
         data = request.get_json()
@@ -127,7 +127,7 @@ class OneUser(Resource):
         return {'message': 'User updated', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
     # Метод удаления пользователя
-    @v1.doc(description='Get User', security='api_key')
+    @v1.doc(description='Delete User By Id', security='api_key')
     @token_required
     def delete(self, user_id):
         user = db.session.scalar(sa.select(User).where(User.id == user_id))
