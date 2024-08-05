@@ -11,6 +11,7 @@ from flask_restx import Resource
 
 v1 = api.namespace('api/v1', description='Api v1 operations')
 
+# Декоратор для проверки api токена
 
 def token_required(func):
     @functools.wraps(func)
@@ -29,6 +30,7 @@ def token_required(func):
     return wrapper
 
 
+# Функция для генерации api токена
 def token_generate(username, expired, secret_key):
     return jwt.encode(
         {
@@ -40,6 +42,7 @@ def token_generate(username, expired, secret_key):
 
 @v1.route('/auth')
 class Auth(Resource):
+    # Метод создания api токена
     @v1.doc(description='Generate apiKey (username=admin / password=admin)', body=auth_fields)
     def post(self):
         data = request.get_json()
@@ -53,6 +56,7 @@ class Auth(Resource):
 
 @v1.route('/users')
 class Users(Resource):
+    # Метод создания User
     @v1.doc(description='Create a new user', body=create_user, security='api_key')
     @token_required
     def post(self):
@@ -72,6 +76,7 @@ class Users(Resource):
         db.session.commit()
         return {'message': 'User created', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.CREATED
 
+    # Метод получения всех существующих пользователей с пагинацией
     @v1.doc(description='Get Users List', security='api_key', params={
         'page': {'description': 'Page', 'in': 'query', 'type': 'int'},
         'per_page': {'description': 'Results per page', 'in': 'query', 'type': 'int'}
@@ -94,6 +99,8 @@ class Users(Resource):
 
 @v1.route('/users/<string:user_id>')
 class OneUser(Resource):
+
+    # Метод получения пользователя по id
     @v1.doc(description='Get User', security='api_key')
     @token_required
     def get(self, user_id):
@@ -103,6 +110,7 @@ class OneUser(Resource):
 
         return {'message': 'User found', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
+    # Метод обновления данных пользователя
     @v1.doc(description='Get User', body=update_user, security='api_key')
     @token_required
     def patch(self, user_id):
@@ -118,6 +126,7 @@ class OneUser(Resource):
         db.session.commit()
         return {'message': 'User updated', 'status': True, 'body': [user.to_dict()]}, HTTPStatus.OK
 
+    # Метод удаления пользователя
     @v1.doc(description='Get User', security='api_key')
     @token_required
     def delete(self, user_id):
