@@ -35,7 +35,7 @@ def token_generate(username, expired, secret_key):
     return jwt.encode(
         {
             'user': username,
-            'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=expired)
+            'exp': datetime.datetime.now() + datetime.timedelta(seconds=expired)
         }, secret_key
     )
 
