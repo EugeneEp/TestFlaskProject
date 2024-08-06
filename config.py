@@ -1,6 +1,6 @@
 import os
 
-POSTGRES_URI = 'postgresql+psycopg2://{user}:{pw}@{url}/{db}'.format(user="postgres", pw="11111", url="localhost:5432",
+POSTGRES_URI = 'postgresql+psycopg2://{user}:{pw}@{url}/{db}'.format(user="postgres", pw="11111", url="db:5432",
                                                                      db="test")
 
 
