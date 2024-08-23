@@ -32,7 +32,7 @@ Authorization: **Bearer <API_TOKEN> (required)**
 
 **[GET]**
 
-*/api/v1/users?page=1&per_page=10* - получить всех пользователей с пагинацией
+*/api/v1/users?page=1&per_page=10* - получить всех пользователей с пагинацией  
 */api/v1/users/{id}* - получить пользователя по id  
 
 **[POST]**
